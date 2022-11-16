@@ -1,0 +1,126 @@
+---
+title: "FOR_Final Assignment"
+author: "Akintunde Yusuf"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, echo= FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(tidyr)
+library(openxlsx)
+library(janitor)
+library(ggplot2)
+library(ggplot2)
+
+```
+
+```{r read_data, echo=FALSE}
+pop_dat <- read_rds('pop_dat.rds')
+
+gdp <- read_rds('gdp.rds')
+
+co2_emissions <- read.xlsx('co2_emissions.xlsx')
+
+country_region <- read_csv('country_region.csv')
+
+```
+
+
+```{r tidy_data, echo= FALSE}
+#melting the years
+co2 <- co2_emissions %>% 
+  pivot_longer(col=`1990`:`2021`, names_to = 'year', values_to = 'co2_emissions' )
+
+#renaming the variable 'Tablename'
+country_region <- country_region %>%
+  rename('Country Name' = TableName)
+
+#separating the country code from the country name
+gda <- gdp %>% 
+  separate(name_code, c('Country Name', 'Country Code'), sep = '_')
+
+#widening dataset
+pop <- pop_dat %>% 
+  pivot_wider(names_from = name, values_from = value)
+
+```
+
+
+```{r Question 1, echo=FALSE}
+
+co <- merge(co2, pop, all = TRUE)
+
+coMerge <- merge(co, gda, all = TRUE)
+
+co2_dat <- merge(coMerge, country_region, all = TRUE) %>% clean_names() %>% 
+  select(country_name, country_code, year, region, income_group, co2_emissions, total_pop, urban_pop_share, gdp)
+
+#write.xlsx(co2_dat, 'co2_dat.xlsx')
+# write_csv(co2_dat, 'co2_dat.csv')
+# write_rds(co2_dat, 'co2_dat.rds')
+```
+
+```{r Question 2, echo=FALSE}
+#(a)
+co2_dat$year <- as.numeric(co2_dat$year)
+co2_dat$co2_emissions <- as.numeric(co2_dat$co2_emissions)
+co2_dat$total_pop <- as.numeric(co2_dat$total_pop)
+co2_dat$urban_pop_share <- as.numeric(co2_dat$urban_pop_share)
+co2_dat$gdp <- as.numeric(co2_dat$gdp)
+
+summary(co2_dat)
+
+#(b)
+countryCount <- co2_dat %>% count(country_name) 
+
+```
+
+```{r Question 3, echo=FALSE}
+ #(a)
+co2_dat[co2_dat$country_name == 'Venezuela, RB', "income_group"] <- 'Upper middle income'
+
+#(b)
+co2_dat <- co2_dat %>% drop_na()
+
+```
+
+```{r Question 4, echo=FALSE}
+co2_dat <- co2_dat %>% mutate(
+  co2_per_cap = co2_emissions/total_pop
+) %>%
+  mutate(gdp_per_cap = gdp/total_pop)
+
+```
+
+
+```{r Question 5, echo=FALSE}
+
+#(a)
+total_co2 <- co2_dat %>% group_by(country_name) %>% summarise(total_co = sum(co2_emissions)) %>% arrange(-total_co) %>% head(20)
+
+#(b)
+mean_co2_per_cap <- co2_dat %>% group_by(country_name) %>% summarise(mean_co2_per_cap = mean(co2_per_cap)) %>% arrange(-mean_co2_per_cap) %>% head(20)
+
+#(c)
+#create a new variable  categorizing the years into decades
+co2_dat <- co2_dat %>% mutate(decades = case_when(
+  str_detect(year, '19') ~ '1990s',
+  str_detect(year, '200') ~ '2000s',
+  str_detect(year, '201') ~ '2010s'
+))
+
+#mean emissions per capita per country in three decades
+mean_emi_per_cap <- co2_dat %>% group_by(country_name, decades) %>% summarise(mean_emi_per_cap = mean(co2_per_cap))
+
+```
+
+```{r Question 6, echo=FALSE}
+ggplot(co2_dat, aes(co2_per_cap, year)) + geom_line()
+  
+ggplot(co2_dat, aes(co2_per_cap, year, fill = country_name)) + geom_line()
+
+```
+
